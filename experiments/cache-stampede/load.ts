@@ -7,22 +7,34 @@
  * Run (from experiments/): npm run cache-stampede:load
  */
 
+export {}; // makes this file a module, so its top-level names don't collide
+           // with idempotency/client.ts under a whole-project type-check
+
 const PORT = 8001;
 const BASE_URL = `http://localhost:${PORT}`;
 const KEY = "hot-product-42";
 const CONCURRENT_REQUESTS = 20;
 
+interface ItemResponse {
+  value: string;
+  source: string;
+}
+
+interface StatsResponse {
+  dbCallCount: number;
+}
+
 async function reset(): Promise<void> {
   await fetch(`${BASE_URL}/reset`, { method: "POST" });
 }
 
-async function getStats(): Promise<{ dbCallCount: number }> {
+async function getStats(): Promise<StatsResponse> {
   const res = await fetch(`${BASE_URL}/stats`);
   return res.json();
 }
 
 async function fireBurst(): Promise<void> {
-  const requests = Array.from({ length: CONCURRENT_REQUESTS }, () =>
+  const requests = Array.from({ length: CONCURRENT_REQUESTS }, (): Promise<ItemResponse> =>
     fetch(`${BASE_URL}/item/${KEY}`).then((r) => r.json())
   );
   const results = await Promise.all(requests);

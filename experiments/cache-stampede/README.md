@@ -10,12 +10,16 @@ This is the stampede (a.k.a. thundering herd): the cache didn't fail, it just ha
 
 ## Approach
 
-Two small Express servers, same `/item/:key` endpoint, backed by the same artificially slow "database" (`db.ts`, a 300ms delay standing in for an expensive query):
+One Express server (`server.ts`) exposes `GET /item/:key`, backed by the same artificially slow "database" (`db.ts`, a 300ms delay standing in for an expensive query). It runs in one of two modes:
 
-- `naive-server.ts` — textbook cache-aside. On a miss, it just calls the database, no coordination with any other in-flight request for the same key.
-- `coalesced-server.ts` — same cache-aside logic, but tracks in-flight lookups per key. If a request misses while another request for that same key is already fetching, it waits on that existing fetch instead of starting a new one. Only the first miss for a key actually touches the database; everyone else behind it shares the result.
+- **naive** — textbook cache-aside. On a miss, it just calls the database, no coordination with any other in-flight request for the same key.
+- **coalesced** — same cache-aside logic, but tracks in-flight lookups per key. If a request misses while another request for that same key is already fetching, it waits on that existing fetch instead of starting a new one. Only the first miss for a key actually touches the database; everyone else behind it shares the result.
+
+`start.ts naive` / `start.ts coalesced` (wired to `npm run cache-stampede:naive` / `:coalesced`) just pick which mode the server starts in. A running server's mode can also be changed live via `POST /mode` (body: `{ "mode": "naive" | "coalesced" }`) — that's what the [visualization's](../../visualizations) "Live" mode uses to let you flip between naive and coalesced against one running server instead of stopping one script and starting another.
 
 `load.ts` warms the cache with one request, waits for the 1-second TTL to expire, then fires 20 concurrent requests for the same key — the exact condition that triggers a stampede — and reports how many of those requests actually reached the database.
+
+The server also broadcasts its real events over a small WebSocket (via `../shared/broadcaster.ts`) — purely additive, it doesn't change any HTTP response or the console output above. Start it, open the visualization, switch to Live, and connect — no restart needed to compare naive vs. coalesced once connected.
 
 ## How to run
 
@@ -36,7 +40,7 @@ npm run cache-stampede:load
 
 ## Expected behavior
 
-**Against `naive-server.ts`:**
+**In naive mode:**
 ```
 Fired 20 concurrent requests for the same key.
 Where each response came from: { database: 20 }
@@ -46,7 +50,7 @@ Database calls made during the burst: 20
 ```
 Every single request in the burst missed the cache and hit the database — the TTL expiry turned one logical "refresh this key" into 20 real database calls happening at once.
 
-**Against `coalesced-server.ts`:**
+**In coalesced mode:**
 ```
 Fired 20 concurrent requests for the same key.
 Where each response came from: { database: 1, coalesced: 19 }
@@ -60,9 +64,9 @@ Same burst, same TTL, same "database" — but only the first request that notice
 
 Worth poking at once the basic version works, because these are the parts a real implementation has to get right:
 
-- **A failed fetch shouldn't poison every waiter.** In `coalesced-server.ts`, if `slowDatabaseLookup` throws, every request awaiting that shared promise gets the same rejection. That's usually correct (better than 20 requests independently failing against an already-struggling backend), but it means one bad fetch fails the whole waiting group — worth deciding if any of them should retry independently versus surface the error immediately.
+- **A failed fetch shouldn't poison every waiter.** In coalesced mode, if `slowDatabaseLookup` throws, every request awaiting that shared promise gets the same rejection. That's usually correct (better than 20 requests independently failing against an already-struggling backend), but it means one bad fetch fails the whole waiting group — worth deciding if any of them should retry independently versus surface the error immediately.
 - **Coalescing only helps within a single process.** If this server runs behind a load balancer with multiple instances, each instance has its own `inFlight` map — the stampede is reduced by a factor of however many requests land on the same instance, not eliminated across the fleet. A shared coalescing layer (e.g., a lock in Redis) is what closes that gap, at the cost of a network round trip to coordinate.
-- **Jittered TTLs are a complementary fix, not a replacement.** Try setting each key's TTL to `TTL_MS + Math.random() * 500` in `naive-server.ts` instead of a fixed value — it spreads out expirations for *different* keys so they don't all stampede at the same instant, but it does nothing for the case in this experiment, where it's the *same* key being hit by many concurrent requests.
+- **Jittered TTLs are a complementary fix, not a replacement.** Try setting each key's TTL to `TTL_MS + Math.random() * 500` in `server.ts` instead of a fixed value — it spreads out expirations for *different* keys so they don't all stampede at the same instant, but it does nothing for the case in this experiment, where it's the *same* key being hit by many concurrent requests.
 - **Serving stale-while-revalidating.** A more forgiving variant: when a key expires, keep serving the old value to new requests while exactly one background request refreshes it, instead of making anyone wait on the fetch at all. Worth sketching out as a follow-up — it trades a little more staleness for zero added latency on the requests that would otherwise wait on the coalesced fetch.
 
 ## Lessons learned

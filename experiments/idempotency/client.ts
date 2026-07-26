@@ -7,6 +7,9 @@
  * (point ADD_IDEMPOTENCY_KEY at true/false below, or pass it as an env var)
  */
 
+export {}; // makes this file a module, so its top-level names don't collide
+           // with cache-stampede/load.ts under a whole-project type-check
+
 const PORT = 8000;
 const BASE_URL = `http://localhost:${PORT}`;
 

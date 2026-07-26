@@ -10,12 +10,16 @@ This is not a rare edge case — it's the default outcome of "network calls can 
 
 ## Approach
 
-Two small Express servers, same `/charge` endpoint, one difference:
+One Express server (`server.ts`) exposes `POST /charge`. It runs in one of two modes:
 
-- `naive-server.ts` — processes every request it receives. No memory of past requests.
-- `idempotent-server.ts` — requires an `Idempotency-Key` header on every request. Before processing, checks whether it's seen that key before. If yes, returns the stored result instead of charging again. If no, processes the charge and stores the result under that key.
+- **naive** — processes every request it receives. No memory of past requests.
+- **idempotent** — requires an `Idempotency-Key` header on every request. Before processing, checks whether it's seen that key before. If yes, returns the stored result instead of charging again. If no, processes the charge and stores the result under that key.
 
 `client.ts` simulates the failure: it sends a charge request, then — regardless of whether it got a response — retries the same logical request 3 times, the way a real retrying HTTP client would after a timeout.
+
+`start.ts naive` / `start.ts idempotent` (wired to `npm run idempotency:naive` / `:idempotent`) just pick which mode the server starts in. A running server's mode can also be changed live via `POST /mode` (body: `{ "requireKey": true | false }`) — that's what the [visualization's](../../visualizations) "Live" mode uses to let you flip between naive and idempotent against one running server instead of stopping one script and starting another.
+
+The server also broadcasts its real events over a small WebSocket (via `../shared/broadcaster.ts`) — purely additive, it doesn't change any HTTP response or the console output above. Start it, open the visualization, switch to Live, and connect — no restart needed to compare the two once connected.
 
 ## How to run
 
@@ -38,7 +42,7 @@ The client prints the server's response for each attempt, including its running 
 
 ## Expected behavior
 
-**Against `naive-server.ts`:**
+**In naive mode:**
 ```
 Attempt 1: { status: 'charged', amount: 50, totalChargesForCustomer: 1 }
 Attempt 2: { status: 'charged', amount: 50, totalChargesForCustomer: 2 }
@@ -46,7 +50,7 @@ Attempt 3: { status: 'charged', amount: 50, totalChargesForCustomer: 3 }
 ```
 The customer gets charged 3 times for what should have been one purchase.
 
-**Against `idempotent-server.ts`:**
+**In idempotent mode:**
 ```
 Attempt 1: { status: 'charged', amount: 50, totalChargesForCustomer: 1, duplicate: false }
 Attempt 2: { status: 'charged', amount: 50, totalChargesForCustomer: 1, duplicate: true }
@@ -54,14 +58,14 @@ Attempt 3: { status: 'charged', amount: 50, totalChargesForCustomer: 1, duplicat
 ```
 Same client, same retries — the customer is charged exactly once, and the duplicates are clearly labeled as such.
 
-To see the naive behavior with the "safe" client (i.e., confirm the fix is on the server, not the client), run `ADD_IDEMPOTENCY_KEY=false npm run idempotency:client` against `idempotent-server.ts` — it will get rejected with a 400, since the key is required.
+To see the naive behavior with the "safe" client (i.e., confirm the fix is on the server, not the client), run `ADD_IDEMPOTENCY_KEY=false npm run idempotency:client` against a server started in idempotent mode — it will get rejected with a 400, since the key is required.
 
 ## Edge cases
 
 Worth poking at once the basic version works, because these are where real idempotency implementations tend to have bugs:
 
-- **Concurrent retries racing each other.** Fire two requests with the same key at literally the same time, before either has finished processing. The check-then-set pattern in `idempotent-server.ts` (`if (existing) {...}` then `seenRequests.set(...)`) has a race condition here — both requests can pass the check before either writes the result. A production fix needs an atomic "claim this key" step (a unique constraint at the database level, or a lock) before doing the actual work.
-- **Same key, different payload.** The server currently rejects this with a 409 — try commenting that check out in `idempotent-server.ts` and rerun the client with a different `amount` on attempt 2 to see why silently returning the cached result would be the wrong call.
+- **Concurrent retries racing each other.** Fire two requests with the same key at literally the same time, before either has finished processing. The check-then-set pattern in `server.ts` (`if (existing) {...}` then `seenRequests.set(...)`) has a race condition here — both requests can pass the check before either writes the result. A production fix needs an atomic "claim this key" step (a unique constraint at the database level, or a lock) before doing the actual work.
+- **Same key, different payload.** The server currently rejects this with a 409 — try commenting that check out in `server.ts` and rerun the client with a different `amount` on attempt 2 to see why silently returning the cached result would be the wrong call.
 - **Key expiry.** The in-memory `Map` here never expires keys, which is fine for a demo and wrong for production (see the note in `retries-and-idempotency.md` about giving keys a TTL). Try adding one and observe what happens to a "retry" that arrives after the key has expired — it's treated as a brand new request, which is the correct and unavoidable tradeoff of any expiry window.
 - **Partial failure mid-processing.** What if the process crashed after incrementing `chargeCount` but before `seenRequests.set()` runs? The retry would see no record and charge again. This is the hardest edge case here and the reason production systems tie the idempotency record write and the side effect into the same transaction wherever possible.
 

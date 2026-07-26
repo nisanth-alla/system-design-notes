@@ -1,24 +1,27 @@
 {
-    "name": "system-design-experiments",
-    "version": "1.0.0",
-    "private": true,
-    "description": "Runnable TypeScript demos accompanying the notes in ../notes",
-    "scripts": {
-      "idempotency:naive": "ts-node idempotency/naive-server.ts",
-      "idempotency:idempotent": "ts-node idempotency/idempotent-server.ts",
-      "idempotency:client": "ts-node idempotency/client.ts",
-      "cache-stampede:naive": "ts-node cache-stampede/naive-server.ts",
-      "cache-stampede:coalesced": "ts-node cache-stampede/coalesced-server.ts",
-      "cache-stampede:load": "ts-node cache-stampede/load.ts"
-    },
-    "dependencies": {
-      "express": "^4.19.2"
-    },
-    "devDependencies": {
-      "@types/express": "^4.17.21",
-      "@types/node": "^20.14.2",
-      "ts-node": "^10.9.2",
-      "typescript": "^5.5.2"
-    }
+  "name": "system-design-experiments",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runnable TypeScript demos accompanying the notes in ../notes",
+  "scripts": {
+    "idempotency:naive": "ts-node idempotency/start.ts naive",
+    "idempotency:idempotent": "ts-node idempotency/start.ts idempotent",
+    "idempotency:client": "ts-node idempotency/client.ts",
+    "cache-stampede:naive": "ts-node cache-stampede/start.ts naive",
+    "cache-stampede:coalesced": "ts-node cache-stampede/start.ts coalesced",
+    "cache-stampede:load": "ts-node cache-stampede/load.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.2",
+    "@types/ws": "^8.5.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2"
   }
-  
+}

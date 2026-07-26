@@ -55,6 +55,8 @@ Other tools in the same family:
 
 A "place order" API is the canonical case. The mobile app calls the endpoint, the request succeeds server-side, but the response is lost on a flaky connection. The app, seeing what looks like a failed request, retries automatically. Without an idempotency key, this creates two orders and charges the customer twice. With one — generated client-side when the user taps "buy," sent on every retry attempt for that same purchase — the server recognizes the second request as a duplicate of the first and returns the original order confirmation instead of creating a new one.
 
+See [`experiments/idempotency`](../experiments/idempotency) for a runnable reproduction of the double-charge bug and the fix, or watch it happen in the [live visualization](https://nisanth-alla.github.io/system-design-notes/).
+
 ## 5-line summary
 
 - Retries exist because you often can't tell whether a failed request actually succeeded on the other end.
