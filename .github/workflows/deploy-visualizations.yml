@@ -37,6 +37,7 @@ jobs:
         working-directory: visualizations
         run: npm run build
 
+      # One-time repo setup: Settings → Pages → Build and deployment → Source: GitHub Actions
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

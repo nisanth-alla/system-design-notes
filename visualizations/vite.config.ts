@@ -1,10 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// GitHub Pages serves this repo at https://<user>.github.io/system-design-notes/
-// and this app is deployed to the /visualizations/ subpath within it, so asset
-// URLs need that base path baked in at build time.
+// GitHub Pages project site: https://<user>.github.io/<repo-name>/
+// The workflow uploads visualizations/dist as the site root, so Vite's base
+// must match the repo name, not a /visualizations/ folder on the host.
 export default defineConfig({
   plugins: [react()],
-  base: "/system-design-notes/visualizations/",
+  base: "/system-design-notes/",
 });

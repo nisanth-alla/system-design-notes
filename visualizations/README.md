@@ -38,7 +38,7 @@ npm install
 npm run dev
 ```
 
-`npm run build` produces a production build in `dist/` with the `base` path set for GitHub Pages (`/system-design-notes/visualizations/`) — if you fork this repo under a different name, update `base` in `vite.config.ts` to match.
+`npm run build` produces a production build in `dist/` with the `base` path set for GitHub Pages (`/system-design-notes/`). If you fork this repo under a different name, update `base` in `vite.config.ts` to `/<your-repo-name>/`.
 
 ## Using Live mode
 
@@ -56,5 +56,5 @@ Then, in the visualization, switch the "Simulated / Live" toggle to **Live** and
 ## Deploying your own fork
 
 1. Push to your fork's `main` branch — the workflow in `.github/workflows/deploy-visualizations.yml` runs automatically.
-2. One-time setup: in your fork's repo settings, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
-3. Update `base` in `vite.config.ts` to `/<your-repo-name>/visualizations/`.
+2. One-time setup: in your fork's repo settings, go to **Settings → Pages** and set **Source** to **GitHub Actions**. Without this, `configure-pages` fails with `Get Pages site failed` / HTTP 404.
+3. Update `base` in `vite.config.ts` to `/<your-repo-name>/`.
